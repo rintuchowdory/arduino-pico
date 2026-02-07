@@ -1,0 +1,50 @@
+name: Build RP2040 UF2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'examples/**'
+      - '.github/workflows/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Prepare Arduino hardware path
+        run: |
+          mkdir -p $HOME/Arduino/hardware/pico
+          cp -r $GITHUB_WORKSPACE $HOME/Arduino/hardware/pico/rp2040
+          cd $HOME/Arduino/hardware/pico/rp2040
+          git submodule update --init --recursive
+
+      - name: Download tools (pico-quick-toolchain)
+        run: |
+          cd $HOME/Arduino/hardware/pico/rp2040/tools
+          python3 get.py
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          sudo mv ./bin/arduino-cli /usr/local/bin/
+
+      - name: Build example (Blink)
+        env:
+          ARDUINO_DATA_DIR: $HOME/Arduino
+        run: |
+          EXAMPLE="$HOME/Arduino/hardware/pico/rp2040/examples/Blink/Blink.ino"
+          FQBN="earlephilhower:rp2040:rp2040:generic_rp2040"
+          mkdir -p build
+          arduino-cli compile --fqbn $FQBN --build-path build "$EXAMPLE"
+          ls -la build || true
+
+      - name: Upload UF2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blink-uf2
+          path: build/**/*.uf2
